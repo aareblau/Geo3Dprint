@@ -1,0 +1,10 @@
+__pycache__/
+.idea/
+tools/
+tests/
+*.pyc
+*.pyo
+*.stl
+*.tif
+*.tiff
+.env
