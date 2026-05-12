@@ -22,6 +22,7 @@ except ImportError:
     tiff = None
 
 STAC_URL = "https://data.geo.admin.ch/api/stac/v1/search"
+STAC_SEARCH_CHUNK_M = 5000.0
 
 
 def log(message: str) -> None:
@@ -60,9 +61,54 @@ def lv95_to_wgs84(e: float, n: float) -> Tuple[float, float]:
 def bbox_lv95_to_wgs84(
     min_e: float, min_n: float, max_e: float, max_n: float
 ) -> Tuple[float, float, float, float]:
-    lon1, lat1 = lv95_to_wgs84(min_e, min_n)
-    lon2, lat2 = lv95_to_wgs84(max_e, max_n)
-    return min(lon1, lon2), min(lat1, lat2), max(lon1, lon2), max(lat1, lat2)
+    corners = (
+        lv95_to_wgs84(min_e, min_n),
+        lv95_to_wgs84(min_e, max_n),
+        lv95_to_wgs84(max_e, min_n),
+        lv95_to_wgs84(max_e, max_n),
+    )
+    lons = [lon for lon, _lat in corners]
+    lats = [lat for _lon, lat in corners]
+    return min(lons), min(lats), max(lons), max(lats)
+
+
+def _stac_next_link(data):
+    for link in data.get("links", []) or []:
+        if (link.get("rel") or "").lower() == "next" and link.get("href"):
+            return link
+    return None
+
+
+def _request_stac_search_page(method: str, url: str, body, timeout: int):
+    method = method.upper()
+    if method == "GET":
+        return request("GET", url, timeout=timeout, max_retries=1)
+    return request(method, url, json=body or {}, timeout=timeout, max_retries=1)
+
+
+def _split_axis(min_value: float, max_value: float, chunk_size: float):
+    value = min_value
+    while value < max_value:
+        next_value = min(value + chunk_size, max_value)
+        yield value, next_value
+        value = next_value
+
+
+def _iter_stac_search_bboxes(
+    min_e: float,
+    min_n: float,
+    max_e: float,
+    max_n: float,
+    *,
+    chunk_size_m: float = STAC_SEARCH_CHUNK_M,
+):
+    e_ranges = list(_split_axis(min_e, max_e, chunk_size_m))
+    n_ranges = list(_split_axis(min_n, max_n, chunk_size_m))
+    total = len(e_ranges) * len(n_ranges)
+    for e_index, (e0, e1) in enumerate(e_ranges, 1):
+        for n_index, (n0, n1) in enumerate(n_ranges, 1):
+            flat_index = (e_index - 1) * len(n_ranges) + n_index
+            yield flat_index, total, (e0, n0, e1, n1)
 
 
 def search_tiles(
@@ -75,52 +121,92 @@ def search_tiles(
     stac_url: str = STAC_URL,
     timeout: int = 60,
 ) -> Sequence[str]:
-    west, south, east, north = bbox_lv95_to_wgs84(min_e, min_n, max_e, max_n)
-    payload = {
-        "collections": [collection],
-        "bbox": [west, south, east, north],
-        "limit": 1000,
-    }
-    log(f"STAC bbox WGS84: {west:.6f},{south:.6f},{east:.6f},{north:.6f}")
-    try:
-        response = request("POST", stac_url, json=payload, timeout=timeout)
-        response.raise_for_status()
-    except Exception:
-        err("STAC Anfrage fehlgeschlagen.")
-        traceback.print_exc()
-        sys.exit(1)
-
-    features = response.json().get("features", [])
     urls = []
-    for feature in features:
-        assets = feature.get("assets", {})
-        picked = None
-        for asset in assets.values():
-            href = (asset.get("href") or "")
-            title = (asset.get("title") or "").lower()
-            mime = (asset.get("type") or "").lower()
-            if href.lower().endswith(".tif") and (
-                "elevation" in title
-                or "height" in title
-                or "dom" in title
-                or "raster" in title
-                or "tif" in mime
-            ):
-                picked = href
+    total_pages = 0
+    search_bboxes = list(_iter_stac_search_bboxes(min_e, min_n, max_e, max_n))
+    if len(search_bboxes) > 1:
+        log(
+            "Grosse Flaeche: STAC-Suche wird in "
+            f"{len(search_bboxes)} Teilflaechen aufgeteilt."
+        )
+
+    for chunk_index, chunk_total, chunk_bbox in search_bboxes:
+        west, south, east, north = bbox_lv95_to_wgs84(*chunk_bbox)
+        payload = {
+            "collections": [collection],
+            "bbox": [west, south, east, north],
+            "limit": 1000,
+        }
+        prefix = f"[{chunk_index}/{chunk_total}] " if chunk_total > 1 else ""
+        log(f"{prefix}STAC bbox WGS84: {west:.6f},{south:.6f},{east:.6f},{north:.6f}")
+        page_count = 0
+        next_method = "POST"
+        next_url = stac_url
+        next_body = payload
+        seen_pages = set()
+
+        while next_url:
+            page_key = (next_method.upper(), next_url, repr(next_body))
+            if page_key in seen_pages:
+                err("STAC Pagination wiederholt dieselbe Seite.")
+                sys.exit(1)
+            seen_pages.add(page_key)
+            page_count += 1
+            total_pages += 1
+            if page_count > 1:
+                log(f"{prefix}STAC Seite {page_count}")
+
+            try:
+                response = _request_stac_search_page(
+                    next_method, next_url, next_body, timeout
+                )
+                response.raise_for_status()
+                data = response.json()
+            except Exception:
+                err("STAC Anfrage fehlgeschlagen.")
+                traceback.print_exc()
+                sys.exit(1)
+
+            for feature in data.get("features", []):
+                assets = feature.get("assets", {})
+                picked = None
+                for asset in assets.values():
+                    href = (asset.get("href") or "")
+                    title = (asset.get("title") or "").lower()
+                    mime = (asset.get("type") or "").lower()
+                    if href.lower().endswith(".tif") and (
+                        "elevation" in title
+                        or "height" in title
+                        or "dom" in title
+                        or "raster" in title
+                        or "tif" in mime
+                    ):
+                        picked = href
+                        break
+                if not picked:
+                    for asset in assets.values():
+                        href = (asset.get("href") or "")
+                        if href.lower().endswith(".tif"):
+                            picked = href
+                            break
+                if picked:
+                    urls.append(picked)
+
+            next_link = _stac_next_link(data)
+            if not next_link:
                 break
-        if not picked:
-            for asset in assets.values():
-                href = (asset.get("href") or "")
-                if href.lower().endswith(".tif"):
-                    picked = href
-                    break
-        if picked:
-            urls.append(picked)
+            next_url = next_link["href"]
+            next_body = next_link.get("body")
+            next_method = (
+                next_link.get("method") or ("POST" if next_body else "GET")
+            ).upper()
 
     urls = sorted(set(urls))
     if not urls:
         err("Keine Tiles gefunden (Collection/BBox prüfen).")
         sys.exit(1)
+    if total_pages > 1:
+        log(f"STAC Seiten: {total_pages}")
     log(f"Tiles: {len(urls)}")
     return urls
 
