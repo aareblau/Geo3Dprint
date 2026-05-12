@@ -197,6 +197,7 @@ def main() -> None:
             interp,
             out_path,
             SCALE_DEFAULT,
+            max_side_m=None,
         )
         if selection.bbox is None:
             raise ValueError("BBox konnte nicht bestimmt werden.")
@@ -220,7 +221,7 @@ def main() -> None:
         )
     elif bbox is None:
         raise ValueError("--bbox ist Pflicht, wenn --no-interactive gesetzt ist.")
-    validate_bbox(bbox)
+    validate_bbox(bbox, max_side_m=None)
 
     start = time.time()
     log("Starte Verarbeitung ...")

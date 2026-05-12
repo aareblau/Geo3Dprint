@@ -170,14 +170,14 @@ def _prompt_float(
 def validate_bbox_size(
     bbox: Tuple[float, float, float, float],
     *,
-    max_side_m: float = MAX_SIDE_M,
+    max_side_m: Optional[float] = MAX_SIDE_M,
 ) -> None:
     min_e, min_n, max_e, max_n = bbox
     width = max_e - min_e
     height = max_n - min_n
     if width <= 0 or height <= 0:
         raise ValueError("BBox muss positive Breite und Hoehe haben.")
-    if width > max_side_m or height > max_side_m:
+    if max_side_m is not None and (width > max_side_m or height > max_side_m):
         raise ValueError(
             "Die Flaeche darf maximal "
             f"{_fmt(max_side_m)} m x {_fmt(max_side_m)} m gross sein. "
@@ -188,7 +188,7 @@ def validate_bbox_size(
 def validate_bbox(
     bbox: Tuple[float, float, float, float],
     *,
-    max_side_m: float = MAX_SIDE_M,
+    max_side_m: Optional[float] = MAX_SIDE_M,
 ) -> None:
     min_e, min_n, max_e, max_n = bbox
     validate_bbox_size(bbox, max_side_m=max_side_m)
@@ -301,6 +301,7 @@ def prompt_user_bbox_config(
     interp_default: str,
     out_default: str,
     scale_default: float,
+    max_side_m: Optional[float] = MAX_SIDE_M,
 ) -> UserSelection:
     print("Interaktiver Modus: Bitte Ort, Auflösung und Einstellungen eingeben.")
     easting = northing = None
@@ -335,17 +336,25 @@ def prompt_user_bbox_config(
         default=res_default,
         min_value=1e-6,
     )
+    width_prompt = "Rechteckbreite in Metern (E-W"
+    if max_side_m is not None:
+        width_prompt += f", max. {_fmt(max_side_m)}"
+    width_prompt += f") [{width_default}]: "
     width = _prompt_float(
-        f"Rechteckbreite in Metern (E-W, max. {_fmt(MAX_SIDE_M)}) [{width_default}]: ",
+        width_prompt,
         default=width_default,
         min_value=10,
-        max_value=MAX_SIDE_M,
+        max_value=max_side_m,
     )
+    height_prompt = "Rechteckhöhe in Metern (N-S"
+    if max_side_m is not None:
+        height_prompt += f", max. {_fmt(max_side_m)}"
+    height_prompt += f") [{height_default}]: "
     height = _prompt_float(
-        f"Rechteckhöhe in Metern (N-S, max. {_fmt(MAX_SIDE_M)}) [{height_default}]: ",
+        height_prompt,
         default=height_default,
         min_value=10,
-        max_value=MAX_SIDE_M,
+        max_value=max_side_m,
     )
     z_ex = _prompt_float(
         f"Z-Überhöhungsfaktor [{zex_default}]: ",
@@ -369,7 +378,7 @@ def prompt_user_bbox_config(
     half_w = width / 2.0
     half_h = height / 2.0
     bbox = (easting - half_w, northing - half_h, easting + half_w, northing + half_h)
-    validate_bbox_size(bbox)
+    validate_bbox_size(bbox, max_side_m=max_side_m)
     return UserSelection(
         resolution_m=resolution,
         bbox=bbox,

@@ -187,6 +187,10 @@ setzen wollen. Er fragt unter anderem:
 - Resampling-Methode
 - Ausgabedatei
 
+Im erweiterten Modus gibt es kein fixes `5000 m x 5000 m`-Seitenlimit. Sehr
+grosse Ausschnitte können aber lange laufen und sehr grosse STL-Dateien
+erzeugen.
+
 Standardwerte in `programm_advanced.py`:
 
 | Einstellung | Standard |
@@ -296,7 +300,11 @@ Das Programm prüft:
 - ob Koordinaten plausibel in der Schweiz liegen,
 - ob LV95- und WGS84-Koordinaten nicht vertauscht wurden,
 - ob Breite und Höhe positiv sind,
-- ob der Ausschnitt maximal `5000 m x 5000 m` gross ist.
+- im geführten Standardmodus, ob der Ausschnitt maximal `5000 m x 5000 m`
+  gross ist.
+
+Der erweiterte Modus prüft weiterhin positive Breite und Höhe sowie plausible
+Schweizer LV95-Koordinaten, erzwingt aber kein fixes Seitenlimit.
 
 ## CLI-Optionen für den erweiterten Modus
 
@@ -343,5 +351,5 @@ Das Programm beendet sich mit einer Fehlermeldung, wenn:
 - keine passenden swisstopo-Kacheln gefunden werden,
 - keine Höhenpixel in den Ausschnitt fallen,
 - Koordinaten ausserhalb der Schweiz liegen,
-- der Ausschnitt zu gross oder ungültig ist,
+- der Ausschnitt ungültig ist,
 - der Download einer benötigten Kachel fehlschlägt.
