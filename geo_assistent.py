@@ -642,6 +642,13 @@ if __name__ == "__main__":
     except ValueError as exc:
         err(str(exc))
         sys.exit(1)
+    except requests.RequestException as exc:
+        err(
+            "Netzwerkfehler beim Laden der swisstopo-Daten. "
+            "Bitte Internet/DNS pruefen und den Lauf erneut starten. "
+            f"Details: {exc}"
+        )
+        sys.exit(1)
     except Exception:
         err("Unerwarteter Fehler")
         traceback.print_exc()

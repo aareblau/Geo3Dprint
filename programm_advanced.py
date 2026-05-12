@@ -12,6 +12,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
+import requests
 from geo_input import validate_bbox, prompt_user_bbox_config
 from http_utils import request
 from terrain_pipeline import (
@@ -326,6 +327,13 @@ if __name__ == "__main__":
         main()
     except ValueError as exc:
         err(str(exc))
+        sys.exit(1)
+    except requests.RequestException as exc:
+        err(
+            "Netzwerkfehler beim Laden der swisstopo-Daten. "
+            "Bitte Internet/DNS pruefen und den Lauf erneut starten. "
+            f"Details: {exc}"
+        )
         sys.exit(1)
     except Exception:
         err("Unerwarteter Fehler")

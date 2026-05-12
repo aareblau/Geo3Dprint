@@ -64,7 +64,14 @@ def request(
 
     for attempt in range(max_retries + 1):
         _wait_for_rate_slot()
-        response = requester(method, url, headers=headers, **kwargs)
+        try:
+            response = requester(method, url, headers=headers, **kwargs)
+        except requests.RequestException:
+            if attempt >= max_retries:
+                raise
+            backoff = DEFAULT_BACKOFF_SECONDS * (2**attempt)
+            time.sleep(backoff)
+            continue
         last_response = response
         if response.status_code not in RETRY_STATUS_CODES or attempt >= max_retries:
             return response

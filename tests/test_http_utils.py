@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import call, patch
 
+import requests
+
 import http_utils
 
 
@@ -21,7 +23,10 @@ class FakeSession:
 
     def request(self, method, url, **kwargs):
         self.calls.append((method, url, kwargs))
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 class HttpUtilsTests(unittest.TestCase):
@@ -56,6 +61,39 @@ class HttpUtilsTests(unittest.TestCase):
 
         headers = session.calls[0][2]["headers"]
         self.assertEqual(headers["User-Agent"], http_utils.DEFAULT_USER_AGENT)
+
+    def test_request_retries_temporary_connection_error(self):
+        error = requests.ConnectionError("temporary DNS failure")
+        response = FakeResponse(200)
+        session = FakeSession([error, response])
+
+        with (
+            patch("http_utils.time.monotonic", return_value=100.0),
+            patch("http_utils.time.sleep") as sleep,
+        ):
+            result = http_utils.request("GET", "https://example.test", session=session)
+
+        self.assertIs(result, response)
+        self.assertEqual(len(session.calls), 2)
+        self.assertIn(call(http_utils.DEFAULT_BACKOFF_SECONDS), sleep.mock_calls)
+
+    def test_request_raises_after_connection_retries_are_exhausted(self):
+        error = requests.ConnectionError("offline")
+        session = FakeSession([error, error])
+
+        with (
+            patch("http_utils.time.monotonic", return_value=100.0),
+            patch("http_utils.time.sleep"),
+            self.assertRaises(requests.ConnectionError),
+        ):
+            http_utils.request(
+                "GET",
+                "https://example.test",
+                session=session,
+                max_retries=1,
+            )
+
+        self.assertEqual(len(session.calls), 2)
 
 
 if __name__ == "__main__":
