@@ -281,6 +281,20 @@ Modelle, indem er:
 - planare Flächen konservativ zusammenfasst,
 - steile Wandbereiche separat behandelt.
 
+## API-Limits und Fair Use
+
+Geo3Dprint verwendet geo.admin.ch und data.geo.admin.ch bewusst sparsam:
+
+- eine Ortssuche über `api3.geo.admin.ch`, wenn ein Ortsname eingegeben wird,
+- eine STAC-Suche über `data.geo.admin.ch` pro Modell,
+- danach die gefundenen GeoTIFF-Kacheln als direkte Downloads.
+
+Für allgemeine REST-Services von `*.geo.admin.ch` gelten seit 2025 als Fair Use
+`40 requests / minute` und `21 Mio requests / year`. Geo3Dprint taktet HTTP-
+Requests deshalb zentral auf maximal 40 Requests pro Minute, setzt einen
+eigenen `User-Agent`, wiederholt temporäre Fehler und wartet bei `429 Too Many
+Requests` gemäss `Retry-After` oder mit exponentiellem Backoff.
+
 ## Koordinaten und Grenzen
 
 LV95-Koordinaten müssen als `E N` eingegeben werden, zum Beispiel:

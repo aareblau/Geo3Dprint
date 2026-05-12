@@ -14,6 +14,8 @@ from typing import Sequence, Tuple
 import numpy as np
 import requests
 
+from http_utils import request
+
 try:
     import tifffile as tiff
 except ImportError:
@@ -81,7 +83,7 @@ def search_tiles(
     }
     log(f"STAC bbox WGS84: {west:.6f},{south:.6f},{east:.6f},{north:.6f}")
     try:
-        response = requests.post(stac_url, json=payload, timeout=timeout)
+        response = request("POST", stac_url, json=payload, timeout=timeout)
         response.raise_for_status()
     except Exception:
         err("STAC Anfrage fehlgeschlagen.")

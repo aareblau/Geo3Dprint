@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
+from http_utils import request
+
 SEARCH_URL = "https://api3.geo.admin.ch/rest/services/api/SearchServer"
 MAX_SIDE_M = 5000.0
 LV95_E_RANGE = (2_420_000.0, 2_900_000.0)
@@ -110,7 +112,8 @@ def get_coords(query: str, *, limit: int = 5, timeout: int = 20) -> Tuple[float,
     if len(query) < 2:
         raise GeocodingError("Ortseingabe ist zu kurz.")
 
-    response = requests.get(
+    response = request(
+        "GET",
         SEARCH_URL,
         params={"searchText": query, "type": "locations", "sr": "2056", "limit": limit},
         timeout=timeout,
