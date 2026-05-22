@@ -7,7 +7,8 @@ Höhenraster und schreibt am Ende eine geschlossene STL-Datei mit
 topografischer Oberfläche, Seitenwänden und Bodenplatte.
 
 Im geführten Standardmodus gibst du einen Modellnamen ein. Die fertige
-STL-Datei wird unter diesem Namen auf dem Desktop gespeichert.
+STL-Datei wird unter diesem Namen im Ordner `Modelle` auf dem Desktop
+gespeichert.
 
 ## Quickstart
 
@@ -85,8 +86,8 @@ Beispiele:
 
 Im geführten Standardmodus versucht Geo3Dprint nach dem Export, die STL-Datei
 automatisch mit der Standard-App des Systems zu öffnen. Wenn das nicht klappt,
-kann die gespeicherte STL-Datei manuell vom Desktop im gewünschten Viewer oder
-Slicer geöffnet werden.
+kann die gespeicherte STL-Datei manuell aus dem Desktop-Ordner `Modelle` im
+gewünschten Viewer oder Slicer geöffnet werden.
 
 ## Verwendung
 
@@ -148,7 +149,7 @@ Feste Einstellungen im geführten Standardmodus:
 
 | Einstellung | Wert |
 | --- | ---: |
-| Ausgabedatei | eingegebener Name auf dem Desktop |
+| Ausgabedatei | eingegebener Name im Desktop-Ordner `Modelle` |
 | STL-Einheit | `mm` |
 | Modellgrösse | lange Seite `100 mm` |
 | Sockel im Modell | `3 mm` |

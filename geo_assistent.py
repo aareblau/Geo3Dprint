@@ -668,9 +668,9 @@ def _desktop_output_path(model_name: str) -> Path:
     filename = _safe_model_filename(model_name)
     if filename is None:
         raise ValueError("Der Modellname darf nicht leer sein.")
-    desktop = _desktop_dir()
-    desktop.mkdir(parents=True, exist_ok=True)
-    return desktop / filename
+    output_dir = _desktop_dir() / "Modelle"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir / filename
 
 
 def _desktop_dir() -> Path:
@@ -699,7 +699,7 @@ def _prompt_model_output_path() -> Path:
             print()
             print("Gib einen Namen fuer die fertige STL-Datei ein.")
             print("Beispiel: Matterhorn oder Berner_Oberland.stl")
-            print("Die Datei wird auf dem Desktop gespeichert.")
+            print("Die Datei wird im Ordner 'Modelle' auf dem Desktop gespeichert.")
             print()
             continue
         try:
