@@ -28,16 +28,31 @@ automatisch grober gerastert und können sehr grosse STL-Dateien erzeugen.
 
 ## Voraussetzungen
 
-- Python 3.10 oder neuer
-- Internetzugang für geo.admin und swisstopo
-- Python-Pakete aus `requirements.txt`
+- Windows: kein vorinstalliertes Python nötig, wenn `Geo3Dprint-starten.bat`
+  verwendet wird
+- Internetzugang beim ersten Start sowie für geo.admin und swisstopo
+- Python 3.10 oder neuer nur bei manuellem Start über `python .\programm.py`
 - Ein 3D-Viewer oder eine Slicer-Software zum Öffnen der fertigen STL-Datei,
   zum Beispiel Microsoft 3D Viewer:
   https://apps.microsoft.com/detail/9nblggh42ths?hl=de-DE&gl=US
 
 ## Installation
 
-Im Projektordner zuerst die Python-Abhängigkeiten installieren:
+Unter Windows reicht ein Doppelklick auf:
+
+```text
+Geo3Dprint-starten.bat
+```
+
+Der Starter verwendet zuerst ein bereits vorhandenes Python. Nur wenn kein
+nutzbares Python gefunden wird, lädt er automatisch eine lokale Python-Laufzeit
+in den Projektordner. Danach erstellt er `.venv`, installiert die Abhängigkeiten
+und startet den geführten Standardmodus. Auf dem Computer muss Python dafür
+nicht vorher installiert sein; beim ersten Start ohne vorhandenes Python ist
+aber Internetzugang nötig.
+
+Wenn Python bereits installiert ist, kann Geo3Dprint auch manuell gestartet
+werden. Im Projektordner zuerst die Python-Abhängigkeiten installieren:
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -49,17 +64,8 @@ Danach den geführten Standardmodus starten:
 python .\programm.py
 ```
 
-Unter Windows kann alternativ direkt `run.ps1` verwendet werden. Das Skript
-legt bei Bedarf eine lokale `.venv` an, installiert die Abhängigkeiten und
-startet danach `programm.py`.
-
-```powershell
-.\run.ps1
-```
-
-Hinweis: `run.ps1` ist eine reine Windows-Starthilfe ohne Zugangsdaten oder
-lokale Pfade. Es ist sinnvoll, diese Datei im Git-Repository zu behalten, weil
-sie die Installation für neue Nutzer vereinfacht.
+Der Ordner `.runtime/` enthält nur die automatisch heruntergeladene lokale
+Python-Laufzeit und wird nicht ins Git-Repository aufgenommen.
 
 ## Fertiges Modell anschauen
 
@@ -360,7 +366,7 @@ Diese Optionen gehören zu `programm_advanced.py`.
 | `geo_input.py` | Eingabevalidierung, Geocoding und Koordinatenumrechnung |
 | `terrain_pipeline.py` | STAC-Suche, GeoTIFF-Lesen, Rasteraufbau, Optimierung und STL-Export |
 | `requirements.txt` | Python-Abhängigkeiten |
-| `run.ps1` | Windows-Starter mit automatischer virtueller Umgebung |
+| `Geo3Dprint-starten.bat` | Windows-Starter mit automatischer lokaler Python-Laufzeit |
 
 ## Fehlerfälle
 

@@ -577,7 +577,6 @@ def main() -> int:
     try:
         while True:
             easting, northing, label = _prompt_location()
-            map_window.close()
             print(f"Gefunden: {label}\n")
             print("Hinweis: Je kleiner der Ausschnitt, desto besser wird die Detailqualitaet.")
             print("Waehle also nur so viel Umgebung, wie du wirklich brauchst.\n")

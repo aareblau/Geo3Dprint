@@ -6,6 +6,10 @@ color 0A
 
 set "ROOT=%~dp0"
 set "VENV_PY=%ROOT%.venv\Scripts\python.exe"
+set "RUNTIME_DIR=%ROOT%.runtime"
+set "NUGET_EXE=%RUNTIME_DIR%\nuget.exe"
+set "PORTABLE_PY=%RUNTIME_DIR%\python\tools\python.exe"
+set "PYTHON_VERSION=3.12.10"
 set "REQ=%ROOT%requirements.txt"
 set "APP=%ROOT%programm.py"
 
@@ -24,23 +28,50 @@ echo ===============================================
 echo.
 
 if not exist "%VENV_PY%" (
-    echo Richte die lokale Python-Umgebung ein...
+    echo Richte Geo3Dprint fuer diesen Ordner ein...
+
     where py >nul 2>nul
     if not errorlevel 1 (
         py -3 -m venv "%ROOT%.venv"
-    ) else (
-        where python >nul 2>nul
-        if errorlevel 1 (
-            echo Python wurde nicht gefunden.
-            echo Bitte Python 3 installieren und danach erneut starten.
-            goto end
-        )
-        python -m venv "%ROOT%.venv"
     )
 
-    if errorlevel 1 (
-        echo Die lokale Python-Umgebung konnte nicht erstellt werden.
-        goto end
+    if not exist "%VENV_PY%" (
+        where python >nul 2>nul
+        if not errorlevel 1 (
+            python -m venv "%ROOT%.venv"
+        )
+    )
+
+    if not exist "%VENV_PY%" (
+        if not exist "%PORTABLE_PY%" (
+            echo Kein nutzbares Python gefunden. Lade lokale Python-Laufzeit herunter...
+            if not exist "%RUNTIME_DIR%" mkdir "%RUNTIME_DIR%"
+
+            "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://aka.ms/nugetclidl' -OutFile $env:NUGET_EXE; exit 0 } catch { Write-Host $_.Exception.Message; exit 1 }"
+            if errorlevel 1 (
+                echo NuGet konnte nicht heruntergeladen werden.
+                echo Bitte Internetverbindung pruefen und erneut starten.
+                goto end
+            )
+
+            "%NUGET_EXE%" install python -Version %PYTHON_VERSION% -ExcludeVersion -OutputDirectory "%RUNTIME_DIR%" -NonInteractive
+            if errorlevel 1 (
+                echo Die lokale Python-Laufzeit konnte nicht heruntergeladen werden.
+                echo Bitte Internetverbindung pruefen und erneut starten.
+                goto end
+            )
+        )
+
+        if not exist "%PORTABLE_PY%" (
+            echo Die lokale Python-Laufzeit wurde nicht gefunden.
+            goto end
+        )
+
+        "%PORTABLE_PY%" -m venv "%ROOT%.venv"
+        if errorlevel 1 (
+            echo Die lokale Python-Umgebung konnte nicht erstellt werden.
+            goto end
+        )
     )
 )
 
