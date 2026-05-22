@@ -7,10 +7,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import traceback
 import webbrowser
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -81,22 +82,125 @@ class MapWindow:
 
     process: subprocess.Popen | None = None
     profile_dir: Path | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _finished: bool = field(default=False, init=False, repr=False)
 
     def close(self) -> None:
-        if self.process is None:
+        with self._lock:
+            process = self.process
+        if process is None:
+            _maximize_console_window()
             return
         print("Schliesse Kartenfenster.")
-        if self.process.poll() is None:
-            self.process.terminate()
+        if process.poll() is None:
+            process.terminate()
             try:
-                self.process.wait(timeout=5)
+                process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=5)
-        if self.profile_dir is not None:
-            shutil.rmtree(self.profile_dir, ignore_errors=True)
-        self.process = None
-        self.profile_dir = None
+                process.kill()
+                process.wait(timeout=5)
+        self._finish()
+
+    def start_monitor(self) -> None:
+        if self.process is None:
+            return
+        thread = threading.Thread(target=self._wait_for_browser, daemon=True)
+        thread.start()
+
+    def _wait_for_browser(self) -> None:
+        with self._lock:
+            process = self.process
+        if process is None:
+            return
+        process.wait()
+        self._finish()
+
+    def _finish(self) -> None:
+        with self._lock:
+            if self._finished:
+                return
+            self._finished = True
+            profile_dir = self.profile_dir
+            self.process = None
+            self.profile_dir = None
+        if profile_dir is not None:
+            shutil.rmtree(profile_dir, ignore_errors=True)
+        _maximize_console_window()
+
+
+def _windows_work_area() -> tuple[int, int, int, int] | None:
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        rect = wintypes.RECT()
+        spi_getworkarea = 0x0030
+        if not ctypes.windll.user32.SystemParametersInfoW(
+            spi_getworkarea, 0, ctypes.byref(rect), 0
+        ):
+            return None
+        return rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
+    except Exception:
+        return None
+
+
+def _move_console_window(*, left: int, top: int, width: int, height: int) -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if not hwnd:
+            return
+        sw_restore = 9
+        ctypes.windll.user32.ShowWindow(hwnd, sw_restore)
+        ctypes.windll.user32.MoveWindow(hwnd, left, top, width, height, True)
+    except Exception:
+        return
+
+
+def _position_console_right() -> None:
+    area = _windows_work_area()
+    if area is None:
+        return
+    left, top, width, height = area
+    half_width = max(400, width // 2)
+    _move_console_window(
+        left=left + half_width,
+        top=top,
+        width=width - half_width,
+        height=height,
+    )
+
+
+def _maximize_console_window() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if not hwnd:
+            return
+        sw_maximize = 3
+        ctypes.windll.user32.ShowWindow(hwnd, sw_maximize)
+    except Exception:
+        return
+
+
+def _browser_left_window_args() -> list[str]:
+    area = _windows_work_area()
+    if area is None:
+        return []
+    left, top, width, height = area
+    half_width = max(400, width // 2)
+    return [
+        f"--window-position={left},{top}",
+        f"--window-size={half_width},{height}",
+    ]
 
 
 def _fmt(value: float) -> str:
@@ -232,6 +336,7 @@ def _browser_candidates() -> list[Path]:
 
 def _open_map() -> MapWindow:
     print(f"Oeffne Karte im Browser: {MAP_URL}")
+    _position_console_right()
     for browser_path in _browser_candidates():
         profile_dir = Path(tempfile.mkdtemp(prefix="geo3dprint-map-"))
         args = [
@@ -239,6 +344,7 @@ def _open_map() -> MapWindow:
             f"--user-data-dir={profile_dir}",
             "--no-first-run",
             "--no-default-browser-check",
+            *_browser_left_window_args(),
             f"--app={MAP_URL}",
         ]
         try:
@@ -251,7 +357,9 @@ def _open_map() -> MapWindow:
         except OSError:
             shutil.rmtree(profile_dir, ignore_errors=True)
             continue
-        return MapWindow(process=process, profile_dir=profile_dir)
+        map_window = MapWindow(process=process, profile_dir=profile_dir)
+        map_window.start_monitor()
+        return map_window
 
     try:
         opened = webbrowser.open(MAP_URL, new=2)
