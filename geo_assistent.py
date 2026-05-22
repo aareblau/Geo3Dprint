@@ -452,6 +452,7 @@ def _open_map() -> MapWindow:
             f"--user-data-dir={profile_dir}",
             "--no-first-run",
             "--no-default-browser-check",
+            "--start-windowed",
             *_browser_left_window_args(),
             f"--app={MAP_URL}",
         ]

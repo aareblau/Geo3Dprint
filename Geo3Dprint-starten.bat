@@ -4,6 +4,7 @@ setlocal
 title Geo3Dprint - Normaler Modus
 color 0A
 
+set "LAYOUT_SCRIPT=%~dp0Geo3Dprint-window-layout.ps1"
 set "ROOT=%~dp0"
 set "VENV_PY=%ROOT%.venv\Scripts\python.exe"
 set "RUNTIME_DIR=%ROOT%.runtime"
@@ -12,6 +13,10 @@ set "PORTABLE_PY=%RUNTIME_DIR%\python\tools\python.exe"
 set "PYTHON_VERSION=3.12.10"
 set "REQ=%ROOT%requirements.txt"
 set "APP=%ROOT%programm.py"
+
+if exist "%LAYOUT_SCRIPT%" (
+    "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "%LAYOUT_SCRIPT%" right >nul 2>nul
+)
 
 pushd "%ROOT%" >nul 2>nul
 if errorlevel 1 (
