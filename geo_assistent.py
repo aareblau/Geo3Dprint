@@ -171,6 +171,30 @@ def _move_console_window(*, left: int, top: int, width: int, height: int) -> Non
         return
 
 
+def _move_window(hwnd: int, *, left: int, top: int, width: int, height: int) -> bool:
+    if sys.platform != "win32" or not hwnd:
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        sw_restore = 9
+        ctypes.windll.user32.ShowWindow(wintypes.HWND(hwnd), sw_restore)
+        return bool(
+            ctypes.windll.user32.SetWindowPos(
+                wintypes.HWND(hwnd),
+                None,
+                left,
+                top,
+                width,
+                height,
+                0x0040,
+            )
+        )
+    except Exception:
+        return False
+
+
 def _parent_process_id(pid: int) -> int | None:
     if sys.platform != "win32":
         return None
@@ -309,6 +333,49 @@ def _browser_left_window_args() -> list[str]:
         f"--window-position={left},{top}",
         f"--window-size={half_width},{height}",
     ]
+
+
+def _top_level_windows_for_pid(pid_value: int) -> list[int]:
+    if sys.platform != "win32":
+        return []
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        found: list[int] = []
+
+        def enum_callback(hwnd, _lparam):
+            if not ctypes.windll.user32.IsWindowVisible(hwnd):
+                return True
+            pid = wintypes.DWORD()
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if int(pid.value) == pid_value:
+                rect = _window_rect(int(hwnd))
+                if rect and rect[2] > 100 and rect[3] > 100:
+                    found.append(int(hwnd))
+            return True
+
+        enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        ctypes.windll.user32.EnumWindows(enum_proc(enum_callback), 0)
+        return found
+    except Exception:
+        return []
+
+
+def _position_browser_left(process: subprocess.Popen, *, timeout: float = 6.0) -> None:
+    area = _windows_work_area()
+    if area is None:
+        return
+    left, top, width, height = area
+    half_width = max(400, width // 2)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            return
+        for hwnd in _top_level_windows_for_pid(process.pid):
+            if _move_window(hwnd, left=left, top=top, width=half_width, height=height):
+                return
+        time.sleep(0.1)
 
 
 def _fmt(value: float) -> str:
@@ -467,6 +534,7 @@ def _open_map() -> MapWindow:
             shutil.rmtree(profile_dir, ignore_errors=True)
             continue
         map_window = MapWindow(process=process, profile_dir=profile_dir)
+        _position_browser_left(process)
         map_window.start_monitor()
         return map_window
 
