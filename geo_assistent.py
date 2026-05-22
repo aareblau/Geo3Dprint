@@ -151,15 +151,123 @@ def _move_console_window(*, left: int, top: int, width: int, height: int) -> Non
         return
     try:
         import ctypes
+        from ctypes import wintypes
 
-        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        hwnd = _console_window_handle()
         if not hwnd:
             return
         sw_restore = 9
         ctypes.windll.user32.ShowWindow(hwnd, sw_restore)
-        ctypes.windll.user32.MoveWindow(hwnd, left, top, width, height, True)
+        ctypes.windll.user32.SetWindowPos(
+            wintypes.HWND(hwnd),
+            None,
+            left,
+            top,
+            width,
+            height,
+            0x0040,
+        )
     except Exception:
         return
+
+
+def _parent_process_id(pid: int) -> int | None:
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class ProcessEntry32(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", ctypes.c_wchar * 260),
+            ]
+
+        snapshot = ctypes.windll.kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+        if snapshot == wintypes.HANDLE(-1).value:
+            return None
+        try:
+            entry = ProcessEntry32()
+            entry.dwSize = ctypes.sizeof(ProcessEntry32)
+            if not ctypes.windll.kernel32.Process32FirstW(snapshot, ctypes.byref(entry)):
+                return None
+            while True:
+                if int(entry.th32ProcessID) == pid:
+                    return int(entry.th32ParentProcessID)
+                if not ctypes.windll.kernel32.Process32NextW(snapshot, ctypes.byref(entry)):
+                    break
+        finally:
+            ctypes.windll.kernel32.CloseHandle(snapshot)
+    except Exception:
+        return None
+    return None
+
+
+def _current_process_chain() -> set[int]:
+    pids: set[int] = set()
+    pid = os.getpid()
+    while pid and pid not in pids:
+        pids.add(pid)
+        pid = _parent_process_id(pid) or 0
+    return pids
+
+
+def _window_rect(hwnd: int) -> tuple[int, int, int, int] | None:
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        rect = wintypes.RECT()
+        if not ctypes.windll.user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(rect)):
+            return None
+        return rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
+    except Exception:
+        return None
+
+
+def _console_window_handle() -> int | None:
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        direct = ctypes.windll.kernel32.GetConsoleWindow()
+        if direct and ctypes.windll.user32.IsWindowVisible(wintypes.HWND(direct)):
+            rect = _window_rect(int(direct))
+            if rect and rect[2] > 100 and rect[3] > 100:
+                return int(direct)
+
+        pids = _current_process_chain()
+        found: list[int] = []
+
+        def enum_callback(hwnd, _lparam):
+            if not ctypes.windll.user32.IsWindowVisible(hwnd):
+                return True
+            pid = wintypes.DWORD()
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if int(pid.value) not in pids:
+                return True
+            title_len = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            rect = _window_rect(int(hwnd))
+            if title_len > 0 and rect and rect[2] > 100 and rect[3] > 100:
+                found.append(int(hwnd))
+            return True
+
+        enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        ctypes.windll.user32.EnumWindows(enum_proc(enum_callback), 0)
+        return found[0] if found else None
+    except Exception:
+        return None
 
 
 def _position_console_right() -> None:
@@ -182,7 +290,7 @@ def _maximize_console_window() -> None:
     try:
         import ctypes
 
-        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        hwnd = _console_window_handle()
         if not hwnd:
             return
         sw_maximize = 3
@@ -775,6 +883,7 @@ def _write_model(
 
 
 def main() -> int:
+    _position_console_right()
     _print_intro()
     map_window = _open_map()
     _print_map_help()
