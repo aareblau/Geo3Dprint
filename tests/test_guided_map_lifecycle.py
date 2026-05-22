@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import geo_assistent
@@ -21,11 +22,13 @@ class GuidedMapLifecycleTests(unittest.TestCase):
 
         def confirm_start(**_kwargs):
             self.assertFalse(map_window.closed)
+            self.assertEqual(_kwargs["out_path"], Path("C:/Users/Test/Desktop/Testmodell.stl"))
             events.append("confirm_start")
             return True
 
-        def write_model(*_args, **_kwargs):
+        def write_model(*_args, **kwargs):
             self.assertTrue(map_window.closed)
+            self.assertEqual(kwargs["out_path"], Path("C:/Users/Test/Desktop/Testmodell.stl"))
             events.append("write_model")
             return "terrain.stl"
 
@@ -38,6 +41,10 @@ class GuidedMapLifecycleTests(unittest.TestCase):
                 return_value=(2_600_000.0, 1_200_000.0, "Testpunkt"),
             ),
             patch("geo_assistent._prompt_length_m", side_effect=[100.0, 100.0]),
+            patch(
+                "geo_assistent._prompt_model_output_path",
+                return_value=Path("C:/Users/Test/Desktop/Testmodell.stl"),
+            ),
             patch("geo_assistent._confirm_start", side_effect=confirm_start),
             patch("geo_assistent._write_model", side_effect=write_model),
             patch("geo_assistent._open_model"),

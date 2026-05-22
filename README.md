@@ -6,7 +6,8 @@ holt passende swissSURFACE3D-Rasterdaten von swisstopo, baut daraus ein
 Höhenraster und schreibt am Ende eine geschlossene STL-Datei mit
 topografischer Oberfläche, Seitenwänden und Bodenplatte.
 
-Das Ergebnis heisst standardmässig `terrain.stl`.
+Im geführten Standardmodus gibst du einen Modellnamen ein. Die fertige
+STL-Datei wird unter diesem Namen auf dem Desktop gespeichert.
 
 ## Quickstart
 
@@ -84,7 +85,8 @@ Beispiele:
 
 Im geführten Standardmodus versucht Geo3Dprint nach dem Export, die STL-Datei
 automatisch mit der Standard-App des Systems zu öffnen. Wenn das nicht klappt,
-kann `terrain.stl` manuell im gewünschten Viewer oder Slicer geöffnet werden.
+kann die gespeicherte STL-Datei manuell vom Desktop im gewünschten Viewer oder
+Slicer geöffnet werden.
 
 ## Verwendung
 
@@ -113,6 +115,7 @@ Der geführte Standardmodus fragt:
 1. Ort oder Koordinaten
 2. Breite des Ausschnitts
 3. Höhe des Ausschnitts
+4. Name der STL-Datei
 
 Akzeptierte Beispiele für den Ort:
 
@@ -145,7 +148,7 @@ Feste Einstellungen im geführten Standardmodus:
 
 | Einstellung | Wert |
 | --- | ---: |
-| Ausgabedatei | `terrain.stl` |
+| Ausgabedatei | eingegebener Name auf dem Desktop |
 | STL-Einheit | `mm` |
 | Modellgrösse | lange Seite `100 mm` |
 | Sockel im Modell | `3 mm` |

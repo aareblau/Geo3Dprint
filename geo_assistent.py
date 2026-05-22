@@ -38,7 +38,6 @@ from terrain_pipeline import (
 
 COLLECTION = "ch.swisstopo.swisssurface3d-raster"
 MAP_URL = "https://map.geo.admin.ch/"
-OUT_PATH = "terrain.stl"
 REFERENCE_RES_M = 0.5
 DEFAULT_WIDTH = 1000.0
 DEFAULT_HEIGHT = 1000.0
@@ -302,10 +301,11 @@ def _print_intro() -> None:
     print("Dieses Programm erstellt eine STL-Datei aus Schweizer Hoehendaten.")
     print("Du musst nichts ueber die Kommandozeile wissen.")
     print()
-    print("Du gibst nur drei Dinge ein:")
+    print("Du gibst nur vier Dinge ein:")
     print("  1. Ort oder Koordinaten")
     print("  2. Breite der Flaeche")
     print("  3. Hoehe der Flaeche")
+    print("  4. Name der STL-Datei")
     print()
     print("Tipp: Du kannst jederzeit 'hilfe' eingeben.")
     print("Zum Abbrechen: 'abbrechen' eingeben oder Ctrl+C druecken.")
@@ -335,6 +335,101 @@ def _print_length_help() -> None:
     print(f"Maximal erlaubt sind {_fmt(MAX_SIDE_M)} m pro Seite.")
     print("Diese Eingabe wird fuer Breite und Hoehe gleich gelesen.")
     print()
+
+
+def _safe_model_filename(raw_name: str) -> str | None:
+    name = raw_name.strip()
+    if not name:
+        return None
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", name)
+    name = re.sub(r"\s+", "_", name)
+    name = re.sub(r"_+", "_", name)
+    name = name.strip(" ._")
+    if not name:
+        return None
+    if not name.lower().endswith(".stl"):
+        name = f"{name}.stl"
+    stem = name[:-4].rstrip(" ._")
+    reserved_names = {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        "COM1",
+        "COM2",
+        "COM3",
+        "COM4",
+        "COM5",
+        "COM6",
+        "COM7",
+        "COM8",
+        "COM9",
+        "LPT1",
+        "LPT2",
+        "LPT3",
+        "LPT4",
+        "LPT5",
+        "LPT6",
+        "LPT7",
+        "LPT8",
+        "LPT9",
+    }
+    if stem.upper() in reserved_names:
+        name = f"{stem}_modell.stl"
+    return name
+
+
+def _desktop_output_path(model_name: str) -> Path:
+    filename = _safe_model_filename(model_name)
+    if filename is None:
+        raise ValueError("Der Modellname darf nicht leer sein.")
+    desktop = _desktop_dir()
+    desktop.mkdir(parents=True, exist_ok=True)
+    return desktop / filename
+
+
+def _desktop_dir() -> Path:
+    if sys.platform == "win32":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
+            ) as key:
+                value, _kind = winreg.QueryValueEx(key, "Desktop")
+            return Path(os.path.expandvars(value))
+        except OSError:
+            pass
+    return Path.home() / "Desktop"
+
+
+def _prompt_model_output_path() -> Path:
+    while True:
+        raw = input("Schritt 4/4 - Name der STL-Datei: ").strip()
+        lowered = raw.lower()
+        if lowered in CANCEL_WORDS:
+            raise UserAbort
+        if lowered in HELP_WORDS:
+            print()
+            print("Gib einen Namen fuer die fertige STL-Datei ein.")
+            print("Beispiel: Matterhorn oder Berner_Oberland.stl")
+            print("Die Datei wird auf dem Desktop gespeichert.")
+            print()
+            continue
+        try:
+            out_path = _desktop_output_path(raw)
+        except ValueError as exc:
+            print()
+            print(f"{exc}")
+            print("Bitte gib einen Namen ein, z. B. Matterhorn.")
+            continue
+        if out_path.exists():
+            print()
+            print(f"Diese Datei gibt es bereits: {out_path}")
+            print("Bitte gib einen anderen Modellnamen ein.")
+            continue
+        return out_path
 
 
 def _prompt_length_m(
@@ -379,7 +474,7 @@ def _prompt_length_m(
 def _prompt_location() -> tuple[float, float, str]:
     while True:
         raw = input(
-            "Schritt 1/2 - Ort oder Koordinaten "
+            "Schritt 1/4 - Ort oder Koordinaten "
             "(Enter zeigt Beispiele): "
         ).strip()
         if not raw:
@@ -418,6 +513,7 @@ def _confirm_start(
     height_m: float,
     resolution_m: float,
     scale_denominator: float,
+    out_path: Path,
 ) -> bool:
     print()
     print("Zusammenfassung")
@@ -427,7 +523,7 @@ def _confirm_start(
     print("Modellgroesse:   laengere Seite 10 cm")
     print(f"Massstab:        1:{_fmt(scale_denominator)}")
     print(f"Aufloesung:      {_fmt(resolution_m)} m/Pixel")
-    print(f"Ausgabe:         {OUT_PATH}")
+    print(f"Ausgabe:         {out_path}")
     print()
     while True:
         raw = input("Jetzt STL erstellen? [Enter = ja, nein = Eingabe aendern]: ")
@@ -471,6 +567,7 @@ def _write_model(
     scale_denominator: float,
     label: str,
     center: tuple[float, float],
+    out_path: Path,
 ) -> str:
     start = time.time()
     urls = search_tiles(*bbox, COLLECTION)
@@ -553,7 +650,7 @@ def _write_model(
 
     log("Starte STL-Export ...")
     final_out = write_stl_binary(
-        OUT_PATH,
+        str(out_path),
         xx,
         yy,
         zz,
@@ -582,15 +679,16 @@ def main() -> int:
             print("Waehle also nur so viel Umgebung, wie du wirklich brauchst.\n")
 
             width_m = _prompt_length_m(
-                f"Schritt 2/3 - Breite der Flaeche (max. {_fmt(MAX_SIDE_M)} m)",
+                f"Schritt 2/4 - Breite der Flaeche (max. {_fmt(MAX_SIDE_M)} m)",
                 default=DEFAULT_WIDTH,
                 min_value=10.0,
             )
             height_m = _prompt_length_m(
-                f"Schritt 3/3 - Hoehe der Flaeche (max. {_fmt(MAX_SIDE_M)} m)",
+                f"Schritt 3/4 - Hoehe der Flaeche (max. {_fmt(MAX_SIDE_M)} m)",
                 default=DEFAULT_HEIGHT,
                 min_value=10.0,
             )
+            out_path = _prompt_model_output_path()
 
             resolution_m = _resolution_for_size(width_m, height_m)
             scale_denominator = _scale_for_size(width_m, height_m)
@@ -603,6 +701,7 @@ def main() -> int:
                 height_m=height_m,
                 resolution_m=resolution_m,
                 scale_denominator=scale_denominator,
+                out_path=out_path,
             ):
                 break
             print()
@@ -620,6 +719,7 @@ def main() -> int:
         scale_denominator=scale_denominator,
         label=label,
         center=(easting, northing),
+        out_path=out_path,
     )
     _open_model(final_out)
     return 0
