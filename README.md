@@ -295,6 +295,10 @@ Requests deshalb zentral auf maximal 40 Requests pro Minute, setzt einen
 eigenen `User-Agent`, wiederholt temporäre Fehler und wartet bei `429 Too Many
 Requests` gemäss `Retry-After` oder mit exponentiellem Backoff.
 
+Heruntergeladene GeoTIFF-Tiles werden lokal unter `.tile_cache/` wiederverwendet.
+Der Ordner ist in `.gitignore` eingetragen und wird nicht nach GitHub gepusht.
+Mit `GEO3DPRINT_TILE_CACHE_DIR` kann ein anderer lokaler Cache-Pfad gesetzt werden.
+
 ## Koordinaten und Grenzen
 
 LV95-Koordinaten müssen als `E N` eingegeben werden, zum Beispiel:

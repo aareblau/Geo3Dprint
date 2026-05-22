@@ -14,10 +14,10 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import requests
 from geo_input import validate_bbox, prompt_user_bbox_config
-from http_utils import request
 from terrain_pipeline import (
     alloc_grid,
     err,
+    fetch_tile_bytes,
     log,
     paste_tile,
     read_tile,
@@ -241,9 +241,8 @@ def main() -> None:
 
     def fetch_tile(item):
         idx, url = item
-        response = request("GET", url, timeout=120)
-        response.raise_for_status()
-        arr, meta = read_tile(response.content)
+        tile_bytes = fetch_tile_bytes(url, timeout=120)
+        arr, meta = read_tile(tile_bytes)
         return idx, url, arr, meta
 
     # Fetch first tile up front to snap the target grid to the source raster lattice.

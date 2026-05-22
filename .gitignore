@@ -1,5 +1,6 @@
 __pycache__/
 .idea/
+.tile_cache/
 tools/
 *.pyc
 *.pyo

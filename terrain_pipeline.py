@@ -2,6 +2,7 @@
 """Helper functions for building LV95 terrain rasters and STL exports."""
 
 import io
+import hashlib
 import math
 import os
 import struct
@@ -9,7 +10,7 @@ import sys
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 import requests
@@ -23,6 +24,7 @@ except ImportError:
 
 STAC_URL = "https://data.geo.admin.ch/api/stac/v1/search"
 STAC_SEARCH_CHUNK_M = 5000.0
+TILE_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".tile_cache")
 
 
 def log(message: str) -> None:
@@ -84,6 +86,49 @@ def _request_stac_search_page(method: str, url: str, body, timeout: int):
     if method == "GET":
         return request("GET", url, timeout=timeout, max_retries=1)
     return request(method, url, json=body or {}, timeout=timeout, max_retries=1)
+
+
+def _tile_cache_path(url: str, cache_dir: str) -> str:
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    clean_url = url.lower().split("?", 1)[0]
+    ext = ".tiff" if clean_url.endswith(".tiff") else ".tif"
+    return os.path.join(cache_dir, f"{digest}{ext}")
+
+
+def fetch_tile_bytes(
+    url: str,
+    *,
+    session: Optional[requests.Session] = None,
+    timeout: int = 120,
+    cache_dir: Optional[str] = None,
+) -> bytes:
+    cache_dir = cache_dir or os.environ.get("GEO3DPRINT_TILE_CACHE_DIR") or TILE_CACHE_DIR
+    path = _tile_cache_path(url, cache_dir)
+
+    try:
+        if os.path.getsize(path) > 0:
+            with open(path, "rb") as fh:
+                return fh.read()
+    except OSError:
+        pass
+
+    response = request("GET", url, session=session, timeout=timeout)
+    response.raise_for_status()
+    data = response.content
+
+    os.makedirs(cache_dir, exist_ok=True)
+    tmp_path = f"{path}.{os.getpid()}.{time.time_ns()}.tmp"
+    try:
+        with open(tmp_path, "wb") as fh:
+            fh.write(data)
+        os.replace(tmp_path, path)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    return data
 
 
 def _split_axis(min_value: float, max_value: float, chunk_size: float):
@@ -1887,6 +1932,7 @@ __all__ = [
     "log",
     "err",
     "search_tiles",
+    "fetch_tile_bytes",
     "read_tile",
     "alloc_grid",
     "paste_tile",

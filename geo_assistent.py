@@ -24,10 +24,10 @@ from geo_input import (
     get_coords,
     validate_bbox_size,
 )
-from http_utils import request
 from terrain_pipeline import (
     alloc_grid,
     err,
+    fetch_tile_bytes,
     log,
     paste_tile,
     read_tile,
@@ -491,9 +491,8 @@ def _write_model(
 
     with requests.Session() as session:
         log(f"[1/{len(urls)}] Lade Tile: {urls[0]}")
-        first_response = request("GET", urls[0], session=session, timeout=120)
-        first_response.raise_for_status()
-        first_arr, first_meta = read_tile(first_response.content)
+        first_tile_bytes = fetch_tile_bytes(urls[0], session=session, timeout=120)
+        first_arr, first_meta = read_tile(first_tile_bytes)
         is_area = first_meta.get("pixel_is_area", True)
         anchor_e = first_meta["x0"] + (0.5 * first_meta["sx"] if is_area else 0.0)
         anchor_n = first_meta["y0"] - (0.5 * first_meta["sy"] if is_area else 0.0)
@@ -515,9 +514,8 @@ def _write_model(
 
         for idx, url in enumerate(urls[1:], 2):
             log(f"[{idx}/{len(urls)}] Lade Tile: {url}")
-            response = request("GET", url, session=session, timeout=120)
-            response.raise_for_status()
-            arr, meta = read_tile(response.content)
+            tile_bytes = fetch_tile_bytes(url, session=session, timeout=120)
+            arr, meta = read_tile(tile_bytes)
             taken = paste_tile(
                 dem,
                 mask,
